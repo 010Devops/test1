@@ -33,5 +33,6 @@ jobs:
       
     - name: Send email for deployment success
       env:
-        EMAIL_SUBJECT: "✅Email Testing Successfull: ${{ inputs.workflow_name || github.workflow }} - ${{ github.ref_name }}" 
+        EMAIL_SUBJECT: "✅Email Testing Successfull: ${{ inputs.workflow_name || github.workflow }} - ${{ github.ref_name }}"
+        EMAIL_BODY: "Testing the sendgrid email from the GitHub repository pipeline"
       run: python3 .github/workflows/email-sender.py
