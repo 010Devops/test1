@@ -25,6 +25,12 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Install SendGrid dependency
+      run: pip3 install sendgrid
+      
     - name: Send email for deployment success
       env:
         EMAIL_SUBJECT: "✅Email Testing Successfull: ${{ inputs.workflow_name || github.workflow }} - ${{ github.ref_name }}" 
