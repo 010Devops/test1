@@ -3,9 +3,9 @@
 name: "Flow to test Sendgrid set-up"
 
 on:
-  # push:
-  #   branches:
-  #     - main
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 env:
