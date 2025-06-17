@@ -14,6 +14,7 @@ receiver_emails = [email.strip() for email in receiver_email.split(",")]
 # Dynamic content for the template
 template_data = {
     "subject": os.environ.get("EMAIL_SUBJECT", "GitHub Actions Notification Email"),
+    "body": os.environ.get("EMAIL_BODY", "GitHub Actions Notification Email"),
     "repository": os.environ.get("GITHUB_REPOSITORY", ""),
     "commit": os.environ.get("GITHUB_SHA", ""),
     "branch": os.environ.get("GITHUB_REF_NAME", ""),
