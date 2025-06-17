@@ -1,0 +1,31 @@
+#WORKFLOW TO TEST THE SENDGRID SETUP
+
+name: "Flow to test Sendgrid set-up"
+
+on:
+  # push:
+  #   branches:
+  #     - main
+  workflow_dispatch:
+
+env:
+  SENDGRID_API_KEY: "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"
+  SENDGRID_TEMPLATE_ID: "d-7445500741924664aa8071ae4cf3b919"
+  SENDER_EMAIL: "nick1demo@outlook.com"
+  RECEIVER_EMAIL: "Nickelson.S@congruentindia.com"
+  GITHUB_SHA: ${{ github.sha }}
+  GITHUB_REF_NAME: ${{ github.ref_name }}
+  GITHUB_ACTOR: ${{ github.actor }}
+  GITHUB_REPOSITORY: ${{ github.repository }}
+  GITHUB_WORKFLOW: ${{ github.workflow }}
+  GITHUB_RUNNER_LINK: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  email-test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Send email for deployment success
+      env:
+        EMAIL_SUBJECT: "✅Email Testing Successfull: ${{ inputs.workflow_name || github.workflow }} - ${{ github.ref_name }}" 
+      run: python3 .github/workflows/email-sender.py
