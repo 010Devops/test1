@@ -1,6 +1,6 @@
 #WORKFLOW TO TEST THE SENDGRID SETUP
 
-name: "Flow to test Sendgrid set-up"
+name: "Flow to testing"
 
 on:
   push:
