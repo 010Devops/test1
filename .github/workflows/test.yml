@@ -1,0 +1,18 @@
+#WORKFLOW TO TEST THE SENDGRID SETUP
+
+name: "Flow to test Sendgrid set-up"
+
+on:
+  push:
+    branches:
+      - dev
+  workflow_dispatch:
+
+jobs:
+  test-job:
+      runs-on: windows-latest
+  
+      steps:
+        - name: Print working directory
+          run: |
+            echo "Current directory:"
