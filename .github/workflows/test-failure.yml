@@ -1,0 +1,30 @@
+#WORKFLOW TO TEST THE success() & failure()
+
+name: "Flow to testing success() & failure()"
+
+on:
+  push:
+    branches:
+      - dev
+  workflow_dispatch:
+
+jobs:
+  test-job:
+      runs-on: windows-latest
+  
+      steps:
+        - name: Test the flow
+          run: |
+            echo "Exit the flow for testing"
+            exit 1
+          continue-on-error: true
+
+        - name: Test the success() flow
+          if: success()
+          run: |
+            echo "✅success() flow completed...!"
+
+        - name: Test the failure() flow
+          if: failure()
+          run: |
+            echo "❌failure() flow completed...!"
