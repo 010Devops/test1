@@ -1,0 +1,16 @@
+name: Test Paths Behavior
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'gh-CLI-commands'
+    paths-ignore:
+      - 'src/**'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "✅ This workflow ran because a valid file changed."
