@@ -1,0 +1,45 @@
+#WORKFLOW TO TEST THE success() & failure()
+
+name: "Flow to testing success() & failure()"
+
+on:
+  push:
+    branches:
+      - dev
+  workflow_dispatch:
+
+jobs:
+  test-job:
+      runs-on: windows-latest
+  
+      steps:
+        - name: Test the flow
+          id: deployment
+          run: |
+            echo "Exit the flow for testing"
+            exit 1
+          continue-on-error: true
+
+        - name: Check if deployment failed
+          id: check_deploy
+          if: always()
+          run: |
+            if [ "${{ steps.deployment.outcome }}" == "failure" ]; then
+              echo "Deployment failed."
+              echo "deploy_failed=true" >> $GITHUB_OUTPUT
+            else
+              echo "Deployment succeeded."
+              echo "deploy_failed=false" >> $GITHUB_OUTPUT
+            fi
+          shell: bash
+
+
+        - name: Test the success() flow
+          if: steps.check_deploy.outputs.deploy_failed == 'false'
+          run: |
+            echo "✅success() flow completed...!"
+
+        - name: Test the failure() flow
+          if: steps.check_deploy.outputs.deploy_failed == 'true'
+          run: |
+            echo "❌failure() flow completed...!"
