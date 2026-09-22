@@ -1,0 +1,46 @@
+name: Auto Trigger Base Branch Workflow
+
+on:
+  pull_request:
+    types:
+      - closed
+    branches:
+      - qa
+      - main
+
+jobs:
+  Dispatch:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+
+    permissions:
+      actions: write
+
+    env:
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      # Trigger the auto-release workflow based on the PR base branch
+      - name: Dispatch Base Branch
+        id: dispatch
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          workflow_name="test-failure.yml"
+          branch_name="${{ github.event.pull_request.base.ref }}"
+
+          echo "Workflow: $workflow_name"
+          echo "Target branch: $branch_name"
+
+          response=$(curl --fail-with-body --silent --show-error \
+            --request POST \
+            --url "https://api.github.com/repos/${{ github.repository }}/actions/workflows/${workflow_name}/dispatches" \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header "Accept: application/vnd.github+json" \
+            --header "X-GitHub-Api-Version: 2026-03-10" \
+            --header "Content-Type: application/json" \
+            --data "{\"ref\":\"$branch_name\"}")
+
+          echo "Workflow dispatch completed successfully."
+          echo "$response"
