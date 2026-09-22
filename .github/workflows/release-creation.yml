@@ -1,0 +1,32 @@
+name: Create Release Version Tag
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  
+jobs:
+  create-release:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Create Release
+        id: create_release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_NAME: main-v0.0.1
+          RELEASE_DESCRIPTION: "Automation release creation testing"
+          RELEASE_BRANCH: ${{ github.ref_name }}
+        run: |
+          gh release create "$RELEASE_NAME" \
+            --target "$RELEASE_BRANCH" \
+            --title "$RELEASE_NAME" \
+            --notes "$RELEASE_DESCRIPTION" \
+            --latest=false
