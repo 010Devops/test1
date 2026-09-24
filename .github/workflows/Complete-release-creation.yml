@@ -63,7 +63,6 @@ jobs:
           // Initialize the packages
           require('web-streams-polyfill');
 
-          const mycore = require('@actions/core');
           const axios = require('axios');
 
           // Get the token from the environment variable
@@ -112,7 +111,7 @@ jobs:
             const releaseDescription =
               `**Enhancements & Bug fixes:**\n\n${commitHistory.join('\n')}`;
 
-            mycore.setOutput('releaseDescription', releaseDescription);
+            core.setOutput('releaseDescription', releaseDescription);
           }
 
           // Fetch the latest release name
@@ -122,7 +121,7 @@ jobs:
           const versionMatch = latestRelease.match(/\d+(\.\d+)+/);
 
           if (!versionMatch) {
-            mycore.setFailed(
+            core.setFailed(
               `Unable to extract version from release name: ${latestRelease}`
             );
           } else {
@@ -162,7 +161,7 @@ jobs:
               releaseName
             );
 
-            mycore.setOutput('releaseName', releaseName);
+            core.setOutput('releaseName', releaseName);
           }
 
           // Wait for the asynchronous function to complete
