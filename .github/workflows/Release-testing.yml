@@ -1,225 +1,203 @@
-name: Base Auto Release Creation with Commits 
+name: Base Auto Release Creation with Commits
 
 on:
   workflow_dispatch:
+
 jobs:
-  Release-Creation:  
+  Release-Creation:
     runs-on: ubuntu-latest
-    
+
     permissions:
       contents: write
       pull-requests: write
 
     env:
       GH_TOKEN: ${{ github.token }}
-      
-    steps: 
+
+    steps:
     - name: Checkout
       # actions/checkout@v7
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
-    # To get the Pull Request details where it recently merged
+    # Latest commit on the branch (single line, safe for GITHUB_OUTPUT)
     - name: Get Current Merge Details
       id: current_merge_details
       run: |
-        current_merge_details=$(git log --oneline)
+        current_merge_details=$(git log -1 --oneline)
         echo "current_merge_details=$current_merge_details" >> "$GITHUB_OUTPUT"
       shell: bash
 
-    # To get the latest release name stored in the repository for the base branch
+    # Latest release whose name matches the current branch name
     - name: Get Latest Release
       id: latest_release
       env:
         GH_TOKEN: ${{ github.token }}
+        BRANCH_NAME: ${{ github.ref_name }}
+        REPO: ${{ github.repository }}
       run: |
-          token="$GH_TOKEN"
-          branch_name="${{ github.ref_name }}"
-          page=1
-          latest_release=""
-          while : ; do
-            response=$(curl -s -H "Authorization: Bearer $token" "https://api.github.com/repos/${{ github.repository }}/releases?page=$page")
-            echo "Response: $response"
-            releases=$(echo "$response" | jq -r --arg branch_name "$branch_name" 'map(select(.name | test($branch_name; "i")))')
-            if [ "$(echo "$releases" | jq -e 'length')" -eq 0 ]  && [ "$(echo "$response" | jq -e 'length')" -eq 0 ] || [ "$(echo "$releases" | jq -e 'length')" -gt 0 ]; then
-              latest_release=$(echo "$releases" | jq -r 'max_by(.published_at) | .tag_name')
-              break
-            fi
-            ((page++))
-          done
-          echo "latest_release=$latest_release" >> "$GITHUB_OUTPUT"
+        set -euo pipefail
+        gh api --paginate "repos/${REPO}/releases?per_page=100" > all_releases.json
+        latest_release=$(jq -s -r --arg branch_name "$BRANCH_NAME" '
+          add // []
+          | map(select((.name // "") | test($branch_name; "i")))
+          | if length == 0 then "" else (max_by(.published_at) | .tag_name) end
+        ' all_releases.json)
+        if [ -z "$latest_release" ]; then
+          echo "No existing release found matching branch '$BRANCH_NAME'" >&2
+          exit 1
+        fi
+        echo "Latest release: $latest_release"
+        echo "latest_release=$latest_release" >> "$GITHUB_OUTPUT"
       shell: bash
-      
-    - name: Set up Node.js
-      # actions/setup-node@v7 
-      uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 
-      with:
-        node-version: ${{ vars.NODE_VERSION }}
-    
-    # Installing required dependencies to run the NodeJS script
-    - name: Install Dependencies
-      run: npm install web-streams-polyfill @actions/github axios --force    
 
-    # To get the PR data and make it as a description for PR and release     
+    # Build PR/release description and compute the next release name
     - name: Release Description Data
       id: release_description
       # actions/github-script@v9
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
       env:
-          GITHUB_TOKEN : ${{ github.token }}
-      
-      with:          
+        CURRENT_MERGE_DETAILS: ${{ steps.current_merge_details.outputs.current_merge_details }}
+        LATEST_RELEASE: ${{ steps.latest_release.outputs.latest_release }}
+        BRANCH_NAME: ${{ github.ref_name }}
+      with:
         github-token: ${{ github.token }}
-        script: |   
-          // Initializing the packages
-          require('web-streams-polyfill');
-          const axios = require('axios');
-          let mergedPRNumber;
+        script: |
+          const { owner, repo } = context.repo;
+          const currentMergeDetails = process.env.CURRENT_MERGE_DETAILS || '';
+          const latestRelease = process.env.LATEST_RELEASE || '';
+          const branchName = (process.env.BRANCH_NAME || '').toLowerCase();
 
-          // To get the token from the environment variable and use it for accessing the data in the repository
-          const token = process.env.GITHUB_TOKEN; 
-
-          // To fetch the Commit history using API in the current PR           
-          async function fetchCommitHistory() {                 
-            let commitHistory = [];
-            let updatedDescriptionData = [];
-            // Get the whole commits in current page
-            const commitsPerPage = 100;   
-            // Get the data from step-id (current_merge_details)         
-            const currentMergeDetails = '${{ steps.current_merge_details.outputs.current_merge_details }}';
-            // Get the PR details using octokit API model to get the current PR number
-            try {
-              const response = await github.pulls.list({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                state: 'closed',
-                sort: 'updated',
-                direction: 'desc',
-              });
-              const mergedPullRequestData = response.data.find((pr) => pr.merged_at !== null);
-              mergedPRNumber = mergedPullRequestData.number;
-            } catch (error) {
-                console.error('Error:', error);
-            }
-            // Push the current PR Merge Details in a required format  
-            updatedDescriptionData.push(currentMergeDetails.split('\n').filter(commit => commit.trim() !== '').map(commit => {
-                  const indexOfSpace = commit.indexOf(' ');
-                  const commitHash = commit.substring(0, indexOfSpace);
-                  const commitMessage = commit.substring(indexOfSpace + 1);
-                  const commitUrl = `https://github.com/${{ github.repository }}/commit/${commitHash}`;
-                  return `• [${commitHash}](${commitUrl}) - ${commitMessage}`;
-                }).join('\n'));
-            // To fetch the whole commits in current page using API and modify it into a required format
-            async function fetchCurrentPageCommits(page) {
-              const response = await axios.get(`https://api.github.com/repos/${ context.repo.owner }/${ context.repo.repo }/pulls/${mergedPRNumber}/commits?page=${page}&per_page=${commitsPerPage}`, {
-                headers: {
-                  Authorization: `Bearer ${token}`,
-                },
-              });     
-              return response.data.map(commit => {
-                const commitHash = commit.sha.substr(0, 7);
-                const commitMessage = commit.commit.message;
-                const commitUrl = commit.html_url;
-                return `• [${commitHash}](${commitUrl}) - ${commitMessage}`;
-              });
-            }
-            let page = 1;
-            let nextPageCommits = await fetchCurrentPageCommits(page);          
-            while (nextPageCommits.length > 0) {
-              commitHistory = commitHistory.concat(nextPageCommits);
-              page++; // Navigate to next page
-              nextPageCommits = await fetchCurrentPageCommits(page);
-            }  	
-            // Header for the commit history in the description
-            updatedDescriptionData.push('\n\n**Commit History:**');
-            // Modifying commit history data into a required format for description
-            commitHistory.map((line, index, array) => {
-              // Get only the merged commit messages
-              const isMergeCommit = line.includes('Merge pull request #');
-              const isLastCommit = index === array.length - 1;
-              // Modifying the merged commit meesages into specific required format
-              if (isMergeCommit) {
-                const parts = line.split('\n');
-                const commitInfo = parts[0];
-                const remainingContent = parts.slice(1).join('\n').trim();
-                const formattedCommitMessage = `${commitInfo} - [ ${remainingContent} ]`;
-                updatedDescriptionData.push(formattedCommitMessage);
-              }
-              else{
-                updatedDescriptionData.push(line);
-              }
+          // ---------- 1. Find the merged PR ----------
+          let mergedPR;
+          try {
+            // Most reliable: PRs associated with the commit this run is on
+            const { data: associated } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+              owner, repo, commit_sha: context.sha,
             });
-            // Get the current pull request details using github API 
-            const { data: existingPullRequest } = await github.pulls.get({owner: context.repo.owner, repo: context.repo.repo, pull_number: mergedPRNumber,});
-            // Filter the existing PR description from the PR details
-            const existingPRDescription = existingPullRequest.body;
-            // Get the current workflow branch name
-            let branchName = "${{ github.ref_name }}";
-            branchName = branchName.toLowerCase();
-            // Valid branches for adding release note
-            const validBranches = ['main', 'master', 'prod', 'production'];
-            let description;
-            if(existingPRDescription == null){
-              description = `**Current Merge Details:**\n${updatedDescriptionData.join('\n')}`;
-            }            
-            else if(validBranches.includes(branchName)){
-              description = `**Release Note:**\n${existingPRDescription}\n\n**Current Merge Details:**\n${updatedDescriptionData.join('\n')}`;
-            }            
-            else{
-              description = `**Description:**\n${existingPRDescription}\n\n**Current Merge Details:**\n${updatedDescriptionData.join('\n')}`;
-            }    
-            // Updating the current PR description using github API
-            const updatePRDescription = await github.pulls.update({owner: context.repo.owner,repo: context.repo.repo,pull_number: mergedPRNumber,body: description});
-            const releaseDescription = `**Enhancements & Bug fixes:**\n\n${description}`;
-            // To create release in the next step using this data as description for the release version
-            core.setOutput('releaseDescription', releaseDescription);
-          }
-          await fetchCommitHistory();  
-          // Get the latest release name from the step-id (latest_release)     
-          let latestRelease = "${{ steps.latest_release.outputs.latest_release }}";
-          // Extract the version part from the input string using a regular expression
-          const versionString = latestRelease.match(/\d+(\.\d+)+/)[0];
-          // Split the version string into an array of integers
-          const version = versionString.split('.').map(part => parseInt(part, 10) || 0);
-
-          let versionFirstPart = parseInt(version[version.length - 3], 10);
-          let versionSecondPart = parseInt(version[version.length - 2], 10);
-          let versionThirdPart = parseInt(version[version.length - 1], 10);
-
-          if(versionThirdPart < 9){	
-            versionThirdPart++;
-            version[version.length - 1] = versionThirdPart.toString(); 
-          }
-          else if(versionSecondPart < 9){
-            versionSecondPart++;
-            versionThirdPart = 0;
-            version[version.length - 2] = versionSecondPart.toString();
-            version[version.length - 1] = versionThirdPart.toString();
-          }
-          else{
-            versionFirstPart++;
-            versionSecondPart = 0;
-            versionThirdPart = 0;
-            version[version.length - 3] = versionFirstPart.toString();
-            version[version.length - 2] = versionSecondPart.toString();
-            version[version.length - 1] = versionThirdPart.toString();
+            mergedPR = associated.find(pr => pr.merged_at);
+          } catch (error) {
+            core.warning(`Could not look up PRs by commit: ${error.message}`);
           }
 
-          let releaseName = version.join('.');
-          // Replace the version value with the version name
-          releaseName = latestRelease.replace(/\d+(\.\d+)+/, releaseName);
-          // To use it in the next step release name and tag
+          if (!mergedPR) {
+            // Fallback: most recently updated merged PR into this branch
+            const { data: closedPRs } = await github.rest.pulls.list({
+              owner, repo,
+              state: 'closed',
+              base: process.env.BRANCH_NAME,
+              sort: 'updated',
+              direction: 'desc',
+              per_page: 20,
+            });
+            mergedPR = closedPRs.find(pr => pr.merged_at !== null);
+          }
+
+          if (!mergedPR) {
+            core.setFailed('No merged pull request found for this branch');
+            return;
+          }
+          const mergedPRNumber = mergedPR.number;
+          core.info(`Using merged PR #${mergedPRNumber}`);
+
+          // ---------- 2. Current merge details ----------
+          const updatedDescriptionData = [];
+          updatedDescriptionData.push(
+            currentMergeDetails
+              .split('\n')
+              .filter(commit => commit.trim() !== '')
+              .map(commit => {
+                const indexOfSpace = commit.indexOf(' ');
+                const commitHash = commit.substring(0, indexOfSpace);
+                const commitMessage = commit.substring(indexOfSpace + 1);
+                const commitUrl = `https://github.com/${owner}/${repo}/commit/${commitHash}`;
+                return `• [${commitHash}](${commitUrl}) - ${commitMessage}`;
+              })
+              .join('\n')
+          );
+
+          // ---------- 3. Commit history of the PR (paginated) ----------
+          const commits = await github.paginate(github.rest.pulls.listCommits, {
+            owner, repo, pull_number: mergedPRNumber, per_page: 100,
+          });
+          const commitHistory = commits.map(commit => {
+            const commitHash = commit.sha.substring(0, 7);
+            return `• [${commitHash}](${commit.html_url}) - ${commit.commit.message}`;
+          });
+
+          updatedDescriptionData.push('\n\n**Commit History:**');
+          commitHistory.forEach(line => {
+            if (line.includes('Merge pull request #')) {
+              const parts = line.split('\n');
+              const commitInfo = parts[0];
+              const remainingContent = parts.slice(1).join('\n').trim();
+              updatedDescriptionData.push(`${commitInfo} - [ ${remainingContent} ]`);
+            } else {
+              updatedDescriptionData.push(line);
+            }
+          });
+
+          // ---------- 4. Update the PR description ----------
+          const { data: existingPullRequest } = await github.rest.pulls.get({
+            owner, repo, pull_number: mergedPRNumber,
+          });
+          const existingPRDescription = existingPullRequest.body;
+
+          const validBranches = ['main', 'master', 'prod', 'production'];
+          let description;
+          if (existingPRDescription == null) {
+            description = `**Current Merge Details:**\n${updatedDescriptionData.join('\n')}`;
+          } else if (validBranches.includes(branchName)) {
+            description = `**Release Note:**\n${existingPRDescription}\n\n**Current Merge Details:**\n${updatedDescriptionData.join('\n')}`;
+          } else {
+            description = `**Description:**\n${existingPRDescription}\n\n**Current Merge Details:**\n${updatedDescriptionData.join('\n')}`;
+          }
+
+          await github.rest.pulls.update({
+            owner, repo, pull_number: mergedPRNumber, body: description,
+          });
+
+          core.setOutput('releaseDescription', `**Enhancements & Bug fixes:**\n\n${description}`);
+
+          // ---------- 5. Compute next release name ----------
+          const match = latestRelease.match(/\d+(\.\d+)+/);
+          if (!match) {
+            core.setFailed(`Could not find a version number in latest release "${latestRelease}"`);
+            return;
+          }
+          const version = match[0].split('.').map(part => parseInt(part, 10) || 0);
+          const n = version.length;
+
+          if (version[n - 1] < 9) {
+            version[n - 1]++;
+          } else if (version[n - 2] < 9) {
+            version[n - 2]++;
+            version[n - 1] = 0;
+          } else {
+            version[n - 3]++;
+            version[n - 2] = 0;
+            version[n - 1] = 0;
+          }
+
+          const releaseName = latestRelease.replace(/\d+(\.\d+)+/, version.join('.'));
+          core.info(`Next release: ${releaseName}`);
           core.setOutput('releaseName', releaseName);
 
-    # To create release with name and description      
+    # Create the release with name and description
     - name: Create Release
       id: create_release
       env:
         GH_TOKEN: ${{ github.token }}
         RELEASE_NAME: ${{ steps.release_description.outputs.releaseName }}
         RELEASE_DESCRIPTION: ${{ steps.release_description.outputs.releaseDescription }}
+        TARGET_BRANCH: ${{ github.ref_name }}
       run: |
+        set -euo pipefail
+        if [ -z "$RELEASE_NAME" ]; then
+          echo "Release name is empty; aborting" >&2
+          exit 1
+        fi
         gh release create "$RELEASE_NAME" \
-          --target "${{ github.ref_name }}" \
+          --target "$TARGET_BRANCH" \
           --title "$RELEASE_NAME" \
           --notes "$RELEASE_DESCRIPTION" \
           --latest
