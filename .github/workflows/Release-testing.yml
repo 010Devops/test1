@@ -56,8 +56,8 @@ jobs:
         node-version: ${{ vars.NODE_VERSION }}
     
     # Installing required dependencies to run the NodeJS script
-    # - name: Install Dependencies
-    #   run: npm install web-streams-polyfill @actions/core axios --force    
+    - name: Install Dependencies
+      run: npm install web-streams-polyfill axios --force    
 
     # To get the PR data and make it as a description for PR and release     
     - name: Release Description Data
