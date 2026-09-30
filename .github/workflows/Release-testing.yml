@@ -73,8 +73,7 @@ jobs:
           // Initializing the packages
           require('web-streams-polyfill');
           const axios = require('axios');
-          const { Octokit } = require("@octokit/action");
-          const octokit = new Octokit();  
+          const { octokit } = require("@octokit/action");
           let mergedPRNumber;
 
           // To get the token from the environment variable and use it for accessing the data in the repository
