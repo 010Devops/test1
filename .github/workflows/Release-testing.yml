@@ -57,7 +57,7 @@ jobs:
     
     # Installing required dependencies to run the NodeJS script
     - name: Install Dependencies
-      run: npm install web-streams-polyfill @octokit/action axios --force    
+      run: npm install web-streams-polyfill @actions/github axios --force    
 
     # To get the PR data and make it as a description for PR and release     
     - name: Release Description Data
@@ -88,7 +88,7 @@ jobs:
             const currentMergeDetails = '${{ steps.current_merge_details.outputs.current_merge_details }}';
             // Get the PR details using octokit API model to get the current PR number
             try {
-              const response = await octokit.pulls.list({
+              const response = await github.pulls.list({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 state: 'closed',
@@ -148,8 +148,8 @@ jobs:
                 updatedDescriptionData.push(line);
               }
             });
-            // Get the current pull request details using octokit API 
-            const { data: existingPullRequest } = await octokit.pulls.get({owner: context.repo.owner, repo: context.repo.repo, pull_number: mergedPRNumber,});
+            // Get the current pull request details using github API 
+            const { data: existingPullRequest } = await github.pulls.get({owner: context.repo.owner, repo: context.repo.repo, pull_number: mergedPRNumber,});
             // Filter the existing PR description from the PR details
             const existingPRDescription = existingPullRequest.body;
             // Get the current workflow branch name
@@ -167,8 +167,8 @@ jobs:
             else{
               description = `**Description:**\n${existingPRDescription}\n\n**Current Merge Details:**\n${updatedDescriptionData.join('\n')}`;
             }    
-            // Updating the current PR description using octokit API
-            const updatePRDescription = await octokit.pulls.update({owner: context.repo.owner,repo: context.repo.repo,pull_number: mergedPRNumber,body: description});
+            // Updating the current PR description using github API
+            const updatePRDescription = await github.pulls.update({owner: context.repo.owner,repo: context.repo.repo,pull_number: mergedPRNumber,body: description});
             const releaseDescription = `**Enhancements & Bug fixes:**\n\n${description}`;
             // To create release in the next step using this data as description for the release version
             core.setOutput('releaseDescription', releaseDescription);
