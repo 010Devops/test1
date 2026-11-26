@@ -15,7 +15,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
 
     steps:
-      - name: Create GitHub Release and Upload Test Asset
+      - name: Create or Update GitHub Release and Upload Test Asset
         env:
           RELEASE_NAME: "Release Testing"
           RELEASE_DESCRIPTION: "Release Testing..."
@@ -28,11 +28,31 @@ jobs:
 
           echo "Release testing - Run ${GITHUB_RUN_NUMBER}" > "$RELEASE_ASSET"
 
-          gh release create "$TAG_NAME" \
-            "$RELEASE_ASSET" \
-            --repo "$GITHUB_REPOSITORY" \
-            --title "Release-$TAG_NAME" \
-            --target "$TARGET_BRANCH" \
-            --generate-notes
+          # Check whether the release already exists
+          if gh release view "$TAG_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
 
-          echo "Release created successfully."
+            echo "Release $TAG_NAME already exists."
+            echo "Updating the existing release asset."
+
+            gh release upload "$TAG_NAME" \
+              "$RELEASE_ASSET" \
+              --repo "$GITHUB_REPOSITORY" \
+              --clobber
+
+            echo "Existing release updated successfully."
+
+          else
+
+            echo "Release $TAG_NAME does not exist."
+            echo "Creating a new GitHub release."
+
+            gh release create "$TAG_NAME" \
+              "$RELEASE_ASSET" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "Release-$TAG_NAME" \
+              --target "$TARGET_BRANCH" \
+              --generate-notes
+
+            echo "New release created successfully."
+
+          fi
