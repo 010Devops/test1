@@ -16,6 +16,7 @@ jobs:
 
     steps:
       - name: Create or Update GitHub Release and Upload Test Asset
+        if: github.ref_type == 'branch' && github.ref_name == 'develop'
         env:
           RELEASE_NAME: "Release Testing"
           RELEASE_DESCRIPTION: "Release Testing..."
